@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>醫院掛科篩選器 | 症狀梳理助手</title>
+<style>
+  :root {
+    --bg: #f5f3f0;
+    --card: #ffffff;
+    --text: #2d2d2d;
+    --muted: #888;
+    --accent: #6b9bd1;
+    --accent2: #7ec4a0;
+    --danger: #e85757;
+    --warn: #f0ad4e;
+    --success: #5cb85c;
+    --info: #5bc0de;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding-bottom: 40px;
+  }
+  header {
+    background: linear-gradient(135deg, var(--accent), #4a7ab8);
+    color: white;
+    padding: 40px 20px;
+    text-align: center;
+  }
+  header h1 { font-size: 1.8rem; margin-bottom: 8px; }
+  header p { opacity: 0.9; font-size: 0.95rem; }
+  .nav { text-align: center; margin: 16px; }
+  .nav a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.9rem;
+    padding: 6px 14px;
+    border: 1px solid var(--accent);
+    border-radius: 20px;
+    display: inline-block;
+  }
+  .container { max-width: 720px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  .card h2 {
+    font-size: 1.1rem;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* 身體部位選擇 */
+  .body-parts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .body-part {
+    padding: 16px 8px;
+    border: 2px solid #e8e8e8;
+    border-radius: 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: white;
+    font-size: 0.9rem;
+  }
+  .body-part .emoji { font-size: 1.8rem; display: block; margin-bottom: 6px; }
+  .body-part:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .body-part.active {
+    border-color: var(--accent);
+    background: #eef4fb;
+    box-shadow: 0 2px 8px rgba(107,155,209,0.15);
+  }
+
+  /* 症狀選擇 */
+  .symptom-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .symptom-tag {
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1.5px solid #e0e0e0;
+    background: #fafafa;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .symptom-tag:hover { border-color: var(--accent); }
+  .symptom-tag.selected {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  .symptom-tag.urgent {
+    border-color: #ffcccb;
+  }
+  .symptom-tag.urgent.selected {
+    background: var(--danger);
+    border-color: var(--danger);
+  }
+
+  /* 結果卡片 */
+  .result-card {
+    border-radius: 16px;
+    padding: 24px;
+    margin-top: 20px;
+  }
+  .result-card.emergency {
+    background: linear-gradient(135deg, #fff0f0, #fff);
+    border: 2px solid var(--danger);
+  }
+  .result-card.urgent {
+    background: linear-gradient(135deg, #fff8e6, #fff);
+    border: 2px solid var(--warn);
+  }
+  .result-card.normal {
+    background: linear-gradient(135deg, #e8f5e9, #fff);
+    border: 2px solid var(--success);
+  }
+  .result-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .result-card.emergency .result-title { color: var(--danger); }
+  .result-card.urgent .result-title { color: #b38600; }
+  .result-card.normal .result-title { color: var(--success); }
+
+  .dept-recommendation {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .dept-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+  .dept-rank {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+  }
+  .dept-rank.rank-1 { background: var(--accent); color: white; }
+  .dept-rank.rank-2 { background: #b8d4f0; color: var(--accent); }
+  .dept-rank.rank-3 { background: #e0e0e0; color: #666; }
+  .dept-name { font-weight: 700; font-size: 1.05rem; }
+  .dept-reason { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+
+  .selected-symptoms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 16px 0;
+    padding: 12px;
+    background: #f8f8f8;
+    border-radius: 10px;
+  }
+  .selected-symptom {
+    padding: 4px 12px;
+    background: var(--accent);
+    color: white;
+    border-radius: 16px;
+    font-size: 0.85rem;
+  }
+
+  .tip-box {
+    padding: 16px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    margin-top: 12px;
+  }
+  .tip-box.danger { background: #fff0f0; color: #a03030; }
+  .tip-box.warn { background: #fff8e6; color: #8a6d00; }
+  .tip-box.info { background: #e3f2fd; color: #1565c0; }
+
+  .btn {
+    display: inline-block;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+    font-weight: 600;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #4a7ab8);
+    color: white;
+    width: 100%;
+  }
+  .btn-secondary {
+    background: #f0f0f0;
+    color: #555;
+    width: 100%;
+    margin-top: 10px;
+  }
+
+  .divider {
+    height: 1px;
+    background: #eee;
+    margin: 20px 0;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+  }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+
+  .disclaimer {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #aaa;
+    margin-top: 30px;
+    padding: 0 20px;
+  }
+
+  @media (max-width: 480px) {
+    header h1 { font-size: 1.4rem; }
+    .card { padding: 18px; }
+    .body-parts { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏥 醫院掛科篩選器</h1>
+  <p>選擇你的症狀，幫你找到最適合的科別</p>
+</header>
+
+<div class="nav">
+</div>
+
+<div class="container">
+
+  <!-- 步驟 1：選擇身體部位 -->
+  <div class="card">
+    <h2>📍 哪裡不舒服？</h2>
+    <div class="body-parts" id="bodyParts"></div>
+  </div>
+
+  <!-- 步驟 2：選擇症狀 -->
+  <div class="card" id="symptomCard" style="display:none;">
+    <h2>🔍 具體症狀</h2>
+    <p style="color:var(--muted);font-size:0.9rem;margin-bottom:12px;">可多選，選得越準確建議越精準</p>
+    <div class="symptom-list" id="symptomList"></div>
+  </div>
+
+  <!-- 步驟 3：分析結果 -->
+  <div id="resultArea"></div>
+
+  <!-- 操作按鈕 -->
+  <div class="card" id="actionCard" style="display:none;">
+    <button class="btn btn-primary" onclick="analyze()">🔎 分析該看哪科</button>
+    <button class="btn btn-secondary" onclick="resetAll()">🔄 重新選擇</button>
+  </div>
+
+  <!-- 免責聲明 -->
+  <p class="disclaimer">
+    ⚠️ 本工具僅供參考，無法取代專業醫療診斷。如有嚴重症狀請立即前往急診就醫。
+  </p>
+
+</div>
+
+<script>
+// ===== 症狀資料庫 =====
+const SYMPTOM_DB = {
+  head: {
+    name: '頭部',
+    emoji: '🧠',
+    symptoms: [
+      { name: '頭痛', urgent: false, depts: ['神經內科', '家醫科'], note: '持續性頭痛建議神經內科' },
+      { name: '頭暈/暈眩', urgent: false, depts: ['神經內科', '耳鼻喉科'], note: '合併耳鳴→耳鼻喉科；合併手腳無力→神經內科' },
+      { name: '頭部外傷', urgent: true, depts: ['急診', '神經外科'], note: '外傷請直接至急診' },
+      { name: '記憶力衰退', urgent: false, depts: ['神經內科', '精神科'], note: '近期明顯退化需盡速就醫' },
+      { name: '抽搐/癲癇', urgent: true, depts: ['急診', '神經內科'], note: '抽搐發作請立即送急診' },
+      { name: '臉部麻木', urgent: true, depts: ['急診', '神經內科'], note: '可能是中風前兆，請盡速就醫' },
+    ]
+  },
+  eye: {
+    name: '眼睛',
+    emoji: '👁️',
+    symptoms: [
+      { name: '視力模糊', urgent: false, depts: ['眼科'], note: '突然視力下降需盡快就診' },
+      { name: '眼睛紅腫/癢', urgent: false, depts: ['眼科', '皮膚科'], note: '過敏性→皮膚科；感染性→眼科' },
+      { name: '飛蚊症增加', urgent: false, depts: ['眼科'], note: '突然大量增加需檢查視網膜' },
+      { name: '眼睛疼痛', urgent: true, depts: ['眼科'], note: '劇烈疼痛請盡速就醫' },
+      { name: '眼睛外傷', urgent: true, depts: ['急診', '眼科'], note: '化學灼傷請先大量沖水再送醫' },
+      { name: '複視（看到兩個）', urgent: true, depts: ['神經內科', '眼科'], note: '可能是神經問題，建議先看神經內科' },
+    ]
+  },
+  ent: {
+    name: '耳鼻喉',
+    emoji: '👂',
+    symptoms: [
+      { name: '耳鳴', urgent: false, depts: ['耳鼻喉科'], note: '持續性耳鳴需檢查聽力' },
+      { name: '聽力下降', urgent: false, depts: ['耳鼻喉科'], note: '突發性聽損72小時內是黃金治療期' },
+      { name: '鼻塞/流鼻水', urgent: false, depts: ['耳鼻喉科', '家醫科'], note: '超過2週→耳鼻喉科' },
+      { name: '喉嚨痛', urgent: false, depts: ['耳鼻喉科', '家醫科'], note: '超過3天或合併發燒→耳鼻喉科' },
+      { name: '耳朵流膿', urgent: false, depts: ['耳鼻喉科'], note: '可能是中耳炎' },
+      { name: '眩暈（天旋地轉）', urgent: false, depts: ['耳鼻喉科', '神經內科'], note: '合併耳鳴→耳鼻喉科' },
+    ]
+  },
+  mouth: {
+    name: '口腔',
+    emoji: '🦷',
+    symptoms: [
+      { name: '牙痛', urgent: false, depts: ['牙科'], note: '夜間痛或咬合痛可能是根管問題' },
+      { name: '牙齦流血', urgent: false, depts: ['牙科', '血液腫瘤科'], note: '長期流血需檢查凝血功能' },
+      { name: '口腔潰瘍', urgent: false, depts: ['牙科', '皮膚科'], note: '超過2週不癒需排除口腔癌' },
+      { name: '嘴破（反覆）', urgent: false, depts: ['牙科', '風濕免疫科'], note: '合併關節痛→風濕免疫科' },
+      { name: '吞嚥困難', urgent: true, depts: ['耳鼻喉科', '胃腸肝膽科'], note: '持續性吞嚥困難需進一步檢查' },
+      { name: '下巴關節痛', urgent: false, depts: ['牙科', '復健科'], note: '咬合問題→牙科；肌肉問題→復健科' },
+    ]
+  },
+  chest: {
+    name: '胸部',
+    emoji: '🫁',
+    symptoms: [
+      { name: '胸痛', urgent: true, depts: ['急診', '心臟內科'], note: '壓迫性胸痛可能是心臟問題，請立即就醫' },
+      { name: '胸悶', urgent: true, depts: ['心臟內科', '胸腔內科'], note: '合併冒冷汗→心臟內科' },
+      { name: '心悸/心跳快', urgent: false, depts: ['心臟內科'], note: '突發性心搏過速需檢查' },
+      { name: '咳嗽', urgent: false, depts: ['胸腔內科', '家醫科'], note: '超過3週→胸腔內科' },
+      { name: '咳血', urgent: true, depts: ['急診', '胸腔內科'], note: '咳血請立即就醫' },
+      { name: '呼吸困難', urgent: true, depts: ['急診', '胸腔內科'], note: '無法平躺或嘴唇發紫→急診' },
+      { name: '乳房腫塊', urgent: false, depts: ['乳房外科', '婦產科'], note: '無痛性腫塊需盡快檢查' },
+    ]
+  },
+  abdomen: {
+    name: '腹部',
+    emoji: '🍞',
+    symptoms: [
+      { name: '腹痛', urgent: false, depts: ['胃腸肝膽科', '家醫科'], note: '右上腹→肝膽；左下腹→腸胃' },
+      { name: '胃痛/灼熱感', urgent: false, depts: ['胃腸肝膽科'], note: '飯後痛→胃潰瘍；空腹痛→十二指腸潰瘍' },
+      { name: '腹脹', urgent: false, depts: ['胃腸肝膽科'], note: '持續腹脹需排除腫瘤' },
+      { name: '噁心/嘔吐', urgent: false, depts: ['胃腸肝膽科', '家醫科'], note: '嘔吐物帶血→急診' },
+      { name: '腹瀉', urgent: false, depts: ['胃腸肝膽科', '感染科'], note: '血便或超過3天→就醫' },
+      { name: '便秘', urgent: false, depts: ['胃腸肝膽科'], note: '習慣改變或血便需檢查' },
+      { name: '黃疸', urgent: true, depts: ['肝膽腸胃科'], note: '皮膚眼白變黃請盡速就醫' },
+      { name: '便血/黑便', urgent: true, depts: ['急診', '胃腸肝膽科'], note: '黑便可能是上消化道出血' },
+    ]
+  },
+  skin: {
+    name: '皮膚',
+    emoji: '✋',
+    symptoms: [
+      { name: '皮膚紅疹', urgent: false, depts: ['皮膚科'], note: '合併發燒→感染科' },
+      { name: '皮膚癢', urgent: false, depts: ['皮膚科', '過敏免疫風濕科'], note: '全身性癢→肝腎功能檢查' },
+      { name: '皮膚腫塊', urgent: false, depts: ['皮膚科', '外科'], note: '快速變大或硬化→盡速就醫' },
+      { name: '青春痘/痤瘡', urgent: false, depts: ['皮膚科'], note: '嚴重型需口服藥治療' },
+      { name: '蚊蟲叮咬腫大', urgent: false, depts: ['皮膚科'], note: '過敏性腫大需藥物控制' },
+      { name: '傷口感染', urgent: false, depts: ['外科', '皮膚科'], note: '紅腫熱痛化膿→外科' },
+      { name: '掉髮', urgent: false, depts: ['皮膚科'], note: '圓形禿或雄性禿治療方式不同' },
+      { name: '指甲變色/變形', urgent: false, depts: ['皮膚科'], note: '灰指甲需長期治療' },
+    ]
+  },
+  muscle: {
+    name: '骨骼肌肉',
+    emoji: '🦴',
+    symptoms: [
+      { name: '關節痛', urgent: false, depts: ['復健科', '骨科', '風濕免疫科'], note: '晨間僵硬→風濕免疫科' },
+      { name: '腰酸背痛', urgent: false, depts: ['復健科', '骨科'], note: '慢性→復健科；外傷→骨科' },
+      { name: '手腳麻木', urgent: false, depts: ['神經內科', '復健科'], note: '單側麻木→神經內科' },
+      { name: '肌肉無力', urgent: false, depts: ['神經內科', '復健科'], note: '漸進性無力→神經內科' },
+      { name: '扭傷/拉傷', urgent: false, depts: ['骨科', '復健科'], note: '急性期→骨科；復健期→復健科' },
+      { name: '骨折', urgent: true, depts: ['急診', '骨科'], note: '請直接至急診' },
+      { name: '抽筋', urgent: false, depts: ['家醫科', '復健科'], note: '頻繁抽筋檢查電解質' },
+    ]
+  },
+  urinary: {
+    name: '泌尿生殖',
+    emoji: '🚽',
+    symptoms: [
+      { name: '頻尿', urgent: false, depts: ['泌尿科', '婦產科'], note: '男性→泌尿科；女性→婦產科' },
+      { name: '排尿疼痛', urgent: false, depts: ['泌尿科', '婦產科'], note: '可能是尿路感染' },
+      { name: '血尿', urgent: true, depts: ['泌尿科'], note: '無痛性血尿需排除腫瘤' },
+      { name: '尿失禁', urgent: false, depts: ['泌尿科', '婦產科'], note: '女性產後→婦產科' },
+      { name: '陰道異常分泌物', urgent: false, depts: ['婦產科'], note: '異味或顏色改變→就醫' },
+      { name: '月經異常', urgent: false, depts: ['婦產科'], note: '週期改變或經量異常' },
+      { name: '勃起功能障礙', urgent: false, depts: ['泌尿科'], note: '可能是心血管問題徵兆' },
+      { name: '睪丸腫塊/疼痛', urgent: false, depts: ['泌尿科'], note: '腫塊需盡速排除腫瘤' },
+    ]
+  },
+  mental: {
+    name: '心理情緒',
+    emoji: '🧘',
+    symptoms: [
+      { name: '失眠', urgent: false, depts: ['精神科', '家醫科'], note: '超過1個月→精神科' },
+      { name: '焦慮/緊張', urgent: false, depts: ['精神科', '身心科'], note: '影響日常生活→精神科' },
+      { name: '情緒低落', urgent: false, depts: ['精神科', '身心科'], note: '持續2週以上→盡速就醫' },
+      { name: '恐慌發作', urgent: false, depts: ['精神科', '身心科'], note: '胸悶、心悸、瀕死感' },
+      { name: '注意力不集中', urgent: false, depts: ['精神科'], note: '長期困擾可能是ADHD' },
+      { name: '自殺意念', urgent: true, depts: ['急診', '精神科'], note: '請立即撥打1925或至急診' },
+    ]
+  },
+  general: {
+    name: '全身',
+    emoji: '🌡️',
+    symptoms: [
+      { name: '發燒', urgent: false, depts: ['家醫科', '感染科'], note: '超過3天或39度→感染科' },
+      { name: '疲倦/虛弱', urgent: false, depts: ['家醫科'], note: '長期疲倦需檢查血球和內分泌' },
+      { name: '體重減輕', urgent: false, depts: ['家醫科', '內分泌科'], note: '半年減5%以上需檢查' },
+      { name: '水腫', urgent: false, depts: ['腎臟科', '心臟內科'], note: '雙腳水腫→腎臟科；合併氣喘→心臟內科' },
+      { name: '盜汗', urgent: false, depts: ['家醫科', '血液腫瘤科'], note: '夜間盜汗→排除感染或腫瘤' },
+      { name: '淋巴結腫大', urgent: false, depts: ['血液腫瘤科'], note: '超過2週不消需檢查' },
+      { name: '過敏反應', urgent: true, depts: ['急診', '過敏免疫風濕科'], note: '呼吸困難或嘴唇腫→急診' },
+    ]
+  },
+};
+
+let selectedPart = null;
+let selectedSymptoms = [];
+
+// 初始化身體部位
+function initBodyParts() {
+  const container = document.getElementById('bodyParts');
+  Object.entries(SYMPTOM_DB).forEach(([key, data]) => {
+    const div = document.createElement('div');
+    div.className = 'body-part';
+    div.dataset.part = key;
+    div.innerHTML = `<span class="emoji">${data.emoji}</span>${data.name}`;
+    div.onclick = () => selectPart(key);
+    container.appendChild(div);
+  });
+}
+
+function selectPart(key) {
+  selectedPart = key;
+  selectedSymptoms = [];
+
+  // 更新部位 UI
+  document.querySelectorAll('.body-part').forEach(el => {
+    el.classList.toggle('active', el.dataset.part === key);
+  });
+
+  // 顯示症狀
+  const symptomCard = document.getElementById('symptomCard');
+  const symptomList = document.getElementById('symptomList');
+  symptomCard.style.display = 'block';
+
+  const symptoms = SYMPTOM_DB[key].symptoms;
+  symptomList.innerHTML = symptoms.map((s, i) => `
+    <span class="symptom-tag ${s.urgent ? 'urgent' : ''}" data-idx="${i}" onclick="toggleSymptom(${i})">
+      ${s.urgent ? '🚨 ' : ''}${s.name}
+    </span>
+  `).join('');
+
+  // 清除結果
+  document.getElementById('resultArea').innerHTML = '';
+  document.getElementById('actionCard').style.display = 'block';
+}
+
+function toggleSymptom(idx) {
+  const tags = document.querySelectorAll('.symptom-tag');
+  const tag = tags[idx];
+  tag.classList.toggle('selected');
+
+  const symptom = SYMPTOM_DB[selectedPart].symptoms[idx];
+  const existing = selectedSymptoms.find(s => s.name === symptom.name);
+  if (existing) {
+    selectedSymptoms = selectedSymptoms.filter(s => s.name !== symptom.name);
+  } else {
+    selectedSymptoms.push(symptom);
+  }
+}
+
+function analyze() {
+  if (selectedSymptoms.length === 0) {
+    alert('請先選擇至少一個症狀');
+    return;
+  }
+
+  // 統計科別推薦
+  const deptScores = {};
+  let hasUrgent = false;
+
+  selectedSymptoms.forEach(s => {
+    if (s.urgent) hasUrgent = true;
+    s.depts.forEach((dept, i) => {
+      if (!deptScores[dept]) deptScores[dept] = { score: 0, reasons: [] };
+      // 第一順位分數較高
+      deptScores[dept].score += (3 - i) * 10;
+      deptScores[dept].reasons.push(`${s.name}：${s.note}`);
+    });
+  });
+
+  // 排序
+  const sortedDepts = Object.entries(deptScores)
+    .sort((a, b) => b[1].score - a[1].score)
+    .slice(0, 3);
+
+  // 決定緊急程度
+  let level = 'normal';
+  let title = '🏥 建議就診科別';
+  let emoji = '✅';
+
+  const urgentSymptoms = selectedSymptoms.filter(s => s.urgent);
+  if (urgentSymptoms.length >= 2) {
+    level = 'emergency';
+    title = '🚨 強烈建議立即就醫';
+    emoji = '🚨';
+  } else if (urgentSymptoms.length === 1) {
+    level = 'urgent';
+    title = '⚠️ 建議盡快就醫';
+    emoji = '⚠️';
+  }
+
+  // 生成結果 HTML
+  const resultArea = document.getElementById('resultArea');
+
+  const selectedHtml = selectedSymptoms.map(s =>
+    `<span class="selected-symptom">${s.urgent ? '🚨' : ''} ${s.name}</span>`
+  ).join('');
+
+  const deptHtml = sortedDepts.map(([dept, data], i) => `
+    <div class="dept-item">
+      <div class="dept-rank rank-${i + 1}">${i + 1}</div>
+      <div>
+        <div class="dept-name">${dept}</div>
+        <div class="dept-reason">${data.reasons[0]}</div>
+      </div>
+    </div>
+  `).join('');
+
+  // 建議文字
+  let tipHtml = '';
+  if (level === 'emergency') {
+    tipHtml = `
+      <div class="tip-box danger">
+        <strong>🚨 緊急提醒：</strong>你選擇的症狀包含緊急情況，建議立即前往<strong>急診</strong>就醫，不要拖延。
+      </div>`;
+  } else if (level === 'urgent') {
+    const urgentName = urgentSymptoms[0].name;
+    tipHtml = `
+      <div class="tip-box warn">
+        <strong>⚠️ 注意：</strong>「${urgentName}」建議盡快就醫。如果症狀加劇，請立即前往急診。
+      </div>`;
+  } else {
+    tipHtml = `
+      <div class="tip-box info">
+        <strong>💡 就醫提醒：</strong>建議先掛<strong>${sortedDepts[0][0]}</strong>，醫師會視情況協助轉診其他科別。
+      </div>`;
+  }
+
+  resultArea.innerHTML = `
+    <div class="card result-card ${level}">
+      <div class="result-title">${emoji} ${title}</div>
+      <p style="color:var(--muted);font-size:0.85rem;margin-bottom:12px;">根據你選擇的症狀：</p>
+      <div class="selected-symptoms">${selectedHtml}</div>
+      <div class="dept-recommendation">${deptHtml}</div>
+      ${tipHtml}
+      <div class="divider"></div>
+      <p style="font-size:0.8rem;color:#aaa;">
+        💬 建議就診時向醫師詳細描述：症狀開始時間、持續多久、什麼情況下加重或緩解、是否有服用藥物。
+      </p>
+    </div>
+  `;
+
+  // 隱藏按鈕區
+  document.getElementById('actionCard').style.display = 'none';
+}
+
+function resetAll() {
+  selectedPart = null;
+  selectedSymptoms = [];
+  document.querySelectorAll('.body-part').forEach(el => el.classList.remove('active'));
+  document.getElementById('symptomCard').style.display = 'none';
+  document.getElementById('resultArea').innerHTML = '';
+  document.getElementById('actionCard').style.display = 'none';
+}
+
+// 初始化
+initBodyParts();
+</script>
+
+</body>
+</html>
