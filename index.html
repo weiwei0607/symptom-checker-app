@@ -496,99 +496,107 @@ function toggleSymptom(idx) {
 }
 
 function analyze() {
-  if (selectedSymptoms.length === 0) {
-    alert('請先選擇至少一個症狀');
-    return;
-  }
+  try {
+    if (selectedSymptoms.length === 0) {
+      alert('請先選擇至少一個症狀');
+      return;
+    }
 
-  // 統計科別推薦
-  const deptScores = {};
-  let hasUrgent = false;
+    // 統計科別推薦
+    const deptScores = {};
+    let hasUrgent = false;
 
-  selectedSymptoms.forEach(s => {
-    if (s.urgent) hasUrgent = true;
-    s.depts.forEach((dept, i) => {
-      if (!deptScores[dept]) deptScores[dept] = { score: 0, reasons: [] };
-      // 第一順位分數較高
-      deptScores[dept].score += (3 - i) * 10;
-      deptScores[dept].reasons.push(`${s.name}：${s.note}`);
+    selectedSymptoms.forEach(s => {
+      if (s.urgent) hasUrgent = true;
+      s.depts.forEach((dept, i) => {
+        if (!deptScores[dept]) deptScores[dept] = { score: 0, reasons: [] };
+        // 第一順位分數較高
+        deptScores[dept].score += (3 - i) * 10;
+        deptScores[dept].reasons.push(`${s.name}：${s.note}`);
+      });
     });
-  });
 
-  // 排序
-  const sortedDepts = Object.entries(deptScores)
-    .sort((a, b) => b[1].score - a[1].score)
-    .slice(0, 3);
+    // 排序
+    const sortedDepts = Object.entries(deptScores)
+      .sort((a, b) => b[1].score - a[1].score)
+      .slice(0, 3);
 
-  // 決定緊急程度
-  let level = 'normal';
-  let title = '🏥 建議就診科別';
-  let emoji = '✅';
+    // 決定緊急程度
+    let level = 'normal';
+    let title = '🏥 建議就診科別';
+    let emoji = '✅';
 
-  const urgentSymptoms = selectedSymptoms.filter(s => s.urgent);
-  if (urgentSymptoms.length >= 2) {
-    level = 'emergency';
-    title = '🚨 強烈建議立即就醫';
-    emoji = '🚨';
-  } else if (urgentSymptoms.length === 1) {
-    level = 'urgent';
-    title = '⚠️ 建議盡快就醫';
-    emoji = '⚠️';
-  }
+    const urgentSymptoms = selectedSymptoms.filter(s => s.urgent);
+    if (urgentSymptoms.length >= 2) {
+      level = 'emergency';
+      title = '🚨 強烈建議立即就醫';
+      emoji = '🚨';
+    } else if (urgentSymptoms.length === 1) {
+      level = 'urgent';
+      title = '⚠️ 建議盡快就醫';
+      emoji = '⚠️';
+    }
 
-  // 生成結果 HTML
-  const resultArea = document.getElementById('resultArea');
+    // 生成結果 HTML
+    const resultArea = document.getElementById('resultArea');
 
-  const selectedHtml = selectedSymptoms.map(s =>
-    `<span class="selected-symptom">${s.urgent ? '🚨' : ''} ${s.name}</span>`
-  ).join('');
+    const selectedHtml = selectedSymptoms.map(s =>
+      `<span class="selected-symptom">${s.urgent ? '🚨' : ''} ${s.name}</span>`
+    ).join('');
 
-  const deptHtml = sortedDepts.map(([dept, data], i) => `
-    <div class="dept-item">
-      <div class="dept-rank rank-${i + 1}">${i + 1}</div>
-      <div>
-        <div class="dept-name">${dept}</div>
-        <div class="dept-reason">${data.reasons[0]}</div>
+    const deptHtml = sortedDepts.map(([dept, data], i) => `
+      <div class="dept-item">
+        <div class="dept-rank rank-${i + 1}">${i + 1}</div>
+        <div>
+          <div class="dept-name">${dept}</div>
+          <div class="dept-reason">${data.reasons[0]}</div>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `).join('');
 
-  // 建議文字
-  let tipHtml = '';
-  if (level === 'emergency') {
-    tipHtml = `
-      <div class="tip-box danger">
-        <strong>🚨 緊急提醒：</strong>你選擇的症狀包含緊急情況，建議立即前往<strong>急診</strong>就醫，不要拖延。
-      </div>`;
-  } else if (level === 'urgent') {
-    const urgentName = urgentSymptoms[0].name;
-    tipHtml = `
-      <div class="tip-box warn">
-        <strong>⚠️ 注意：</strong>「${urgentName}」建議盡快就醫。如果症狀加劇，請立即前往急診。
-      </div>`;
-  } else {
-    tipHtml = `
-      <div class="tip-box info">
-        <strong>💡 就醫提醒：</strong>建議先掛<strong>${sortedDepts[0][0]}</strong>，醫師會視情況協助轉診其他科別。
-      </div>`;
+    // 建議文字
+    let tipHtml = '';
+    if (level === 'emergency') {
+      tipHtml = `
+        <div class="tip-box danger">
+          <strong>🚨 緊急提醒：</strong>你選擇的症狀包含緊急情況，建議立即前往<strong>急診</strong>就醫，不要拖延。
+        </div>`;
+    } else if (level === 'urgent') {
+      const urgentName = urgentSymptoms[0].name;
+      tipHtml = `
+        <div class="tip-box warn">
+          <strong>⚠️ 注意：</strong>「${urgentName}」建議盡快就醫。如果症狀加劇，請立即前往急診。
+        </div>`;
+    } else {
+      tipHtml = `
+        <div class="tip-box info">
+          <strong>💡 就醫提醒：</strong>建議先掛<strong>${sortedDepts[0][0]}</strong>，醫師會視情況協助轉診其他科別。
+        </div>`;
+    }
+
+    resultArea.innerHTML = `
+      <div class="card result-card ${level}">
+        <div class="result-title">${emoji} ${title}</div>
+        <p style="color:var(--muted);font-size:0.85rem;margin-bottom:12px;">根據你選擇的症狀：</p>
+        <div class="selected-symptoms">${selectedHtml}</div>
+        <div class="dept-recommendation">${deptHtml}</div>
+        ${tipHtml}
+        <div class="divider"></div>
+        <p style="font-size:0.8rem;color:#aaa;">
+          💬 建議就診時向醫師詳細描述：症狀開始時間、持續多久、什麼情況下加重或緩解、是否有服用藥物。
+        </p>
+      </div>
+    `;
+
+    // 隱藏按鈕區
+    document.getElementById('actionCard').style.display = 'none';
+  } catch (err) {
+    console.error('分析失敗:', err);
+    const resultArea = document.getElementById('resultArea');
+    if (resultArea) {
+      resultArea.innerHTML = '<div class="card"><p style="color:var(--danger)">⚠️ 分析時發生錯誤，請重新選擇症狀後再試。</p></div>';
+    }
   }
-
-  resultArea.innerHTML = `
-    <div class="card result-card ${level}">
-      <div class="result-title">${emoji} ${title}</div>
-      <p style="color:var(--muted);font-size:0.85rem;margin-bottom:12px;">根據你選擇的症狀：</p>
-      <div class="selected-symptoms">${selectedHtml}</div>
-      <div class="dept-recommendation">${deptHtml}</div>
-      ${tipHtml}
-      <div class="divider"></div>
-      <p style="font-size:0.8rem;color:#aaa;">
-        💬 建議就診時向醫師詳細描述：症狀開始時間、持續多久、什麼情況下加重或緩解、是否有服用藥物。
-      </p>
-    </div>
-  `;
-
-  // 隱藏按鈕區
-  document.getElementById('actionCard').style.display = 'none';
 }
 
 function resetAll() {
