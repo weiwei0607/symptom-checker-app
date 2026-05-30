@@ -250,6 +250,147 @@
     .card { padding: 18px; }
     .body-parts { grid-template-columns: repeat(3, 1fr); }
   }
+
+  /* Header settings button */
+  header { position: relative; }
+  .header-settings {
+    position: absolute;
+    top: 16px; right: 16px;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 1.1rem;
+    width: 38px; height: 38px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .header-settings:hover { background: rgba(255,255,255,0.35); }
+
+  /* AI card styles */
+  .ai-badge {
+    font-size: 0.65rem;
+    background: linear-gradient(135deg, #7c3aed, #4f46e5);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    vertical-align: middle;
+  }
+  .ai-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 0;
+  }
+  .ai-tab-btn {
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    font-size: 0.9rem;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    font-weight: 600;
+    transition: all 0.15s;
+  }
+  .ai-tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .ai-textarea {
+    width: 100%;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 120px;
+    outline: none;
+    transition: border-color 0.15s;
+    background: #fafafa;
+  }
+  .ai-textarea:focus { border-color: var(--accent); background: white; }
+  .ai-result {
+    background: linear-gradient(135deg, #f0f4ff, #fff);
+    border: 1.5px solid #b8c8f0;
+    border-radius: 14px;
+    padding: 20px;
+    margin-top: 16px;
+  }
+  .ai-result-title {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #3a5aad;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .spin {
+    display: inline-block;
+    width: 18px; height: 18px;
+    border: 2.5px solid rgba(255,255,255,0.4);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .what-to-tell {
+    background: #e8f4fd;
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 0.9rem;
+    color: #1a4a8a;
+    margin-top: 12px;
+  }
+
+  /* Settings modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-box {
+    background: white;
+    border-radius: 20px;
+    padding: 28px;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  }
+  .modal-box h3 { font-size: 1rem; margin-bottom: 8px; }
+  .modal-box p { font-size: 0.85rem; color: var(--muted); margin-bottom: 16px; }
+  .modal-input {
+    width: 100%;
+    border: 1.5px solid #ddd;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 0.9rem;
+    font-family: monospace;
+    outline: none;
+    margin-bottom: 16px;
+    transition: border-color 0.15s;
+  }
+  .modal-input:focus { border-color: var(--accent); }
+  .modal-btns { display: flex; gap: 10px; }
+  .modal-btns button { flex: 1; padding: 12px; border: none; border-radius: 12px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+  .modal-cancel { background: #f0f0f0; color: #555; }
+  .modal-save { background: linear-gradient(135deg, var(--accent), #4a7ab8); color: white; }
 </style>
 </head>
 <body>
@@ -257,15 +398,45 @@
 <header>
   <h1>🏥 醫院掛科篩選器</h1>
   <p>選擇你的症狀，幫你找到最適合的科別</p>
+  <button class="header-settings" onclick="openSymptomSettings()" title="設定 Gemini API Key">⚙️</button>
 </header>
 
-<div class="nav">
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal" style="display:none;" onclick="if(event.target===this)closeSymptomSettings()">
+  <div class="modal-box">
+    <h3>⚙️ Gemini API Key</h3>
+    <p>AI 自然語言分析需要 Gemini API Key（只存在本機）</p>
+    <input type="password" class="modal-input" id="geminiKeyInput" placeholder="AIzaSy..." />
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="closeSymptomSettings()">取消</button>
+      <button class="modal-save" onclick="saveSymptomSettings()">儲存</button>
+    </div>
+  </div>
 </div>
 
 <div class="container">
 
-  <!-- 步驟 1：選擇身體部位 -->
+  <!-- AI 自然語言分析 -->
   <div class="card">
+    <h2>🤖 AI 症狀分析 <span class="ai-badge">AI</span></h2>
+    <div class="ai-tabs">
+      <button class="ai-tab-btn active" id="tabAI" onclick="switchAiTab('ai')">✍️ 文字描述</button>
+      <button class="ai-tab-btn" id="tabManual" onclick="switchAiTab('manual')">📋 點選症狀</button>
+    </div>
+    <div id="aiPanel">
+      <p style="color:var(--muted);font-size:0.9rem;margin-bottom:12px;">直接描述你哪裡不舒服，AI 幫你判斷該掛哪科</p>
+      <textarea class="ai-textarea" id="aiInput" placeholder="例如：我最近胸口悶悶的，有時候心跳很快，爬樓梯會喘，已經兩週了。之前沒有這種情況..."></textarea>
+      <div id="aiError" style="color:var(--danger);font-size:0.85rem;display:none;margin-top:8px;"></div>
+      <button class="btn btn-primary" id="aiBtn" onclick="analyzeWithAI()" style="margin-top:12px;">✨ AI 智能分析</button>
+      <div id="aiResult"></div>
+    </div>
+    <div id="manualPanel" style="display:none;">
+      <p style="color:var(--muted);font-size:0.9rem;">從下方選擇身體部位和症狀，點擊「分析該看哪科」</p>
+    </div>
+  </div>
+
+  <!-- 步驟 1：選擇身體部位（點選症狀模式） -->
+  <div class="card" id="manualSection" style="display:none;">
     <h2>📍 哪裡不舒服？</h2>
     <div class="body-parts" id="bodyParts"></div>
   </div>
@@ -282,6 +453,7 @@
 
   <!-- 操作按鈕 -->
   <div class="card" id="actionCard" style="display:none;">
+    <p id="analyzeError" style="color:var(--danger);font-size:0.85rem;margin-bottom:8px;display:none;">請先選擇至少一個症狀</p>
     <button class="btn btn-primary" onclick="analyze()">🔎 分析該看哪科</button>
     <button class="btn btn-secondary" onclick="resetAll()">🔄 重新選擇</button>
   </div>
@@ -294,6 +466,152 @@
 </div>
 
 <script>
+// ===== AI 分析功能 =====
+const GEMINI_MODEL = 'gemini-1.5-flash';
+
+function getGeminiKey() {
+  return localStorage.getItem('symptom_gemini_key') ?? '';
+}
+
+function openSymptomSettings() {
+  document.getElementById('geminiKeyInput').value = getGeminiKey();
+  document.getElementById('settingsModal').style.display = 'flex';
+}
+function closeSymptomSettings() {
+  document.getElementById('settingsModal').style.display = 'none';
+}
+function saveSymptomSettings() {
+  const key = document.getElementById('geminiKeyInput').value.trim();
+  if (key) localStorage.setItem('symptom_gemini_key', key);
+  else localStorage.removeItem('symptom_gemini_key');
+  closeSymptomSettings();
+}
+
+let currentAiTab = 'ai';
+function switchAiTab(tab) {
+  currentAiTab = tab;
+  document.getElementById('tabAI').classList.toggle('active', tab === 'ai');
+  document.getElementById('tabManual').classList.toggle('active', tab === 'manual');
+  document.getElementById('aiPanel').style.display = tab === 'ai' ? 'block' : 'none';
+  document.getElementById('manualPanel').style.display = tab === 'manual' ? 'block' : 'none';
+  document.getElementById('manualSection').style.display = tab === 'manual' ? 'block' : 'none';
+  document.getElementById('symptomCard').style.display = 'none';
+  document.getElementById('actionCard').style.display = 'none';
+  document.getElementById('resultArea').innerHTML = '';
+}
+
+async function analyzeWithAI() {
+  const text = document.getElementById('aiInput').value.trim();
+  const errEl = document.getElementById('aiError');
+  const resultEl = document.getElementById('aiResult');
+  const btn = document.getElementById('aiBtn');
+
+  if (!text) {
+    errEl.textContent = '請先描述你的症狀';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+
+  const apiKey = getGeminiKey();
+  if (!apiKey) {
+    errEl.innerHTML = '需要 Gemini API Key 才能使用 AI 分析。<a href="#" onclick="openSymptomSettings();return false;" style="color:var(--accent);font-weight:600;">點此設定</a>';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>AI 分析中...';
+  resultEl.innerHTML = '';
+
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `你是一位台灣的醫療諮詢助手，請根據用戶描述的症狀，推薦合適的就診科別。
+
+用戶描述的症狀：
+${text}
+
+請回傳 JSON（不要其他文字）：
+{
+  "urgencyLevel": "emergency（立即急診）|urgent（盡快就醫）|normal（一般門診）",
+  "analysis": "一句話總結症狀描述",
+  "departments": [
+    {"name": "科別名稱", "rank": 1, "reason": "推薦原因（20字內）"}
+  ],
+  "redFlags": ["需要立即就醫的警訊，如果有的話"],
+  "whatToTell": "就診時建議告訴醫師的重點（症狀時間、程度、誘發因素等）"
+}`
+            }]
+          }],
+          generationConfig: { response_mime_type: 'application/json' },
+        }),
+      }
+    );
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message ?? `API 錯誤 ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const raw = data.candidates[0].content.parts[0].text.trim();
+    const result = JSON.parse(raw);
+    renderAiResult(result);
+  } catch (e) {
+    errEl.textContent = e.message || 'AI 分析失敗，請重試';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '✨ AI 智能分析';
+  }
+}
+
+function renderAiResult(r) {
+  const level = r.urgencyLevel ?? 'normal';
+  const levelMap = {
+    emergency: { cls: 'emergency', emoji: '🚨', label: '建議立即前往急診' },
+    urgent:    { cls: 'urgent',    emoji: '⚠️', label: '建議盡快就醫（今明日內）' },
+    normal:    { cls: 'normal',    emoji: '✅', label: '一般門診即可' },
+  };
+  const lv = levelMap[level] ?? levelMap.normal;
+
+  const depts = (r.departments ?? []).slice(0, 3).map((d, i) => `
+    <div class="dept-item">
+      <div class="dept-rank rank-${Math.min(i+1,3)}">${i+1}</div>
+      <div>
+        <div class="dept-name">${d.name}</div>
+        <div class="dept-reason">${d.reason}</div>
+      </div>
+    </div>
+  `).join('');
+
+  const redFlags = (r.redFlags ?? []).length > 0 ? `
+    <div class="tip-box danger" style="margin-top:12px;">
+      <strong>🚨 注意警訊：</strong><br>
+      ${r.redFlags.map(f => `• ${f}`).join('<br>')}
+    </div>
+  ` : '';
+
+  const el = document.getElementById('aiResult');
+  el.innerHTML = `
+    <div class="result-card ${lv.cls}" style="margin-top:16px;">
+      <div class="result-title">${lv.emoji} ${lv.label}</div>
+      <p style="font-size:0.85rem;color:var(--muted);margin-bottom:14px;">AI 解讀：${r.analysis}</p>
+      <div class="dept-recommendation">${depts}</div>
+      ${redFlags}
+      ${r.whatToTell ? `<div class="what-to-tell"><strong>💬 就診時告訴醫師：</strong><br>${r.whatToTell}</div>` : ''}
+    </div>
+  `;
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 // ===== 症狀資料庫 =====
 const SYMPTOM_DB = {
   head: {
@@ -479,6 +797,7 @@ function selectPart(key) {
   // 清除結果
   document.getElementById('resultArea').innerHTML = '';
   document.getElementById('actionCard').style.display = 'block';
+  saveState();
 }
 
 function toggleSymptom(idx) {
@@ -493,13 +812,15 @@ function toggleSymptom(idx) {
   } else {
     selectedSymptoms.push(symptom);
   }
+  saveState();
 }
 
 function analyze() {
   if (selectedSymptoms.length === 0) {
-    alert('請先選擇至少一個症狀');
+    document.getElementById('analyzeError').style.display = 'block';
     return;
   }
+  document.getElementById('analyzeError').style.display = 'none';
 
   // 統計科別推薦
   const deptScores = {};
@@ -525,8 +846,12 @@ function analyze() {
   let title = '🏥 建議就診科別';
   let emoji = '✅';
 
+  // 單一出現即為急診的症狀
+  const IMMEDIATE_EMERGENCY = ['胸痛', '呼吸困難', '咳血', '自殺意念', '抽搐/癲癇', '臉部麻木', '過敏反應', '頭部外傷'];
   const urgentSymptoms = selectedSymptoms.filter(s => s.urgent);
-  if (urgentSymptoms.length >= 2) {
+  const isImmediate = selectedSymptoms.some(s => IMMEDIATE_EMERGENCY.includes(s.name));
+
+  if (isImmediate || urgentSymptoms.length >= 2) {
     level = 'emergency';
     title = '🚨 強烈建議立即就醫';
     emoji = '🚨';
@@ -548,7 +873,7 @@ function analyze() {
       <div class="dept-rank rank-${i + 1}">${i + 1}</div>
       <div>
         <div class="dept-name">${dept}</div>
-        <div class="dept-reason">${data.reasons[0]}</div>
+        <div class="dept-reason">${data.reasons.join('・')}</div>
       </div>
     </div>
   `).join('');
@@ -589,19 +914,46 @@ function analyze() {
 
   // 隱藏按鈕區
   document.getElementById('actionCard').style.display = 'none';
+  document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function resetAll() {
   selectedPart = null;
   selectedSymptoms = [];
+  localStorage.removeItem('symptomChecker_state');
   document.querySelectorAll('.body-part').forEach(el => el.classList.remove('active'));
   document.getElementById('symptomCard').style.display = 'none';
   document.getElementById('resultArea').innerHTML = '';
   document.getElementById('actionCard').style.display = 'none';
+  document.getElementById('analyzeError').style.display = 'none';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function saveState() {
+  localStorage.setItem('symptomChecker_state', JSON.stringify({
+    selectedPart,
+    selectedSymptoms: selectedSymptoms.map(s => s.name)
+  }));
+}
+
+function loadState() {
+  const raw = localStorage.getItem('symptomChecker_state');
+  if (!raw) return;
+  try {
+    const { selectedPart: part, selectedSymptoms: names } = JSON.parse(raw);
+    if (part && SYMPTOM_DB[part]) {
+      selectPart(part);
+      names.forEach(name => {
+        const idx = SYMPTOM_DB[part].symptoms.findIndex(s => s.name === name);
+        if (idx >= 0) toggleSymptom(idx);
+      });
+    }
+  } catch(e) {}
 }
 
 // 初始化
 initBodyParts();
+loadState();
 </script>
 
 </body>
