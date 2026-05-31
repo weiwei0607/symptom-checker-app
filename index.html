@@ -467,7 +467,7 @@
 
 <script>
 // ===== AI 分析功能 =====
-const GEMINI_MODEL = 'gemini-1.5-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 function getGeminiKey() {
   return localStorage.getItem('symptom_gemini_key') ?? '';
@@ -607,9 +607,36 @@ function renderAiResult(r) {
       <div class="dept-recommendation">${depts}</div>
       ${redFlags}
       ${r.whatToTell ? `<div class="what-to-tell"><strong>💬 就診時告訴醫師：</strong><br>${r.whatToTell}</div>` : ''}
+      <button onclick="copyAiResult()" style="margin-top:14px;width:100%;padding:10px;border:1.5px solid #ddd;border-radius:12px;background:white;color:#555;font-size:0.85rem;font-weight:600;cursor:pointer;" onmouseenter="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseleave="this.style.borderColor='#ddd';this.style.color='#555'">📋 複製分析結果</button>
     </div>
   `;
   el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  el._aiResultData = r;
+}
+
+function copyAiResult() {
+  const el = document.getElementById('aiResult');
+  const r = el._aiResultData;
+  if (!r) return;
+  const depts = (r.departments ?? []).slice(0, 3).map((d, i) => `${i+1}. ${d.name}：${d.reason}`).join('\n');
+  const flags = (r.redFlags ?? []).length > 0 ? '\n🚨 注意警訊：\n' + r.redFlags.map(f => `• ${f}`).join('\n') : '';
+  const tell = r.whatToTell ? `\n💬 就診時告訴醫師：\n${r.whatToTell}` : '';
+  const levelMap = { emergency: '🚨 立即前往急診', urgent: '⚠️ 盡快就醫', normal: '✅ 一般門診即可' };
+  const text = [
+    `【${levelMap[r.urgencyLevel] ?? '✅ 一般門診即可'}】`,
+    `AI 解讀：${r.analysis}`,
+    '',
+    '建議科別：',
+    depts,
+    flags,
+    tell,
+    '',
+    '（由 醫院掛科篩選器 AI 分析，僅供參考，無法取代專業醫療診斷）'
+  ].join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('#aiResult button');
+    if (btn) { btn.textContent = '✅ 已複製！'; setTimeout(() => { btn.textContent = '📋 複製分析結果'; }, 2000); }
+  });
 }
 
 // ===== 症狀資料庫 =====
