@@ -469,8 +469,10 @@
 // ===== AI 分析功能 =====
 const GEMINI_MODEL = 'gemini-2.5-flash';
 
+let sessionGeminiKey = '';
+
 function getGeminiKey() {
-  return localStorage.getItem('symptom_gemini_key') ?? '';
+  return sessionGeminiKey;
 }
 
 function escapeHtml(str) {
@@ -487,8 +489,7 @@ function closeSymptomSettings() {
 }
 function saveSymptomSettings() {
   const key = document.getElementById('geminiKeyInput').value.trim();
-  if (key) localStorage.setItem('symptom_gemini_key', key);
-  else localStorage.removeItem('symptom_gemini_key');
+  sessionGeminiKey = key || '';
   closeSymptomSettings();
 }
 
@@ -812,6 +813,7 @@ const SYMPTOM_DB = {
 
 let selectedPart = null;
 let selectedSymptoms = [];
+let isRestoring = false;
 
 // 初始化身體部位
 function initBodyParts() {
@@ -984,6 +986,7 @@ function resetAll() {
 }
 
 function saveState() {
+  if (isRestoring) return;
   localStorage.setItem('symptomChecker_state', JSON.stringify({
     selectedPart,
     selectedSymptoms: selectedSymptoms.map(s => s.name)
@@ -996,11 +999,16 @@ function loadState() {
   try {
     const { selectedPart: part, selectedSymptoms: names } = JSON.parse(raw);
     if (part && SYMPTOM_DB[part]) {
-      selectPart(part);
-      names.forEach(name => {
-        const idx = SYMPTOM_DB[part].symptoms.findIndex(s => s.name === name);
-        if (idx >= 0) toggleSymptom(idx);
-      });
+      isRestoring = true;
+      try {
+        selectPart(part);
+        names.forEach(name => {
+          const idx = SYMPTOM_DB[part].symptoms.findIndex(s => s.name === name);
+          if (idx >= 0) toggleSymptom(idx);
+        });
+      } finally {
+        isRestoring = false;
+      }
     }
   } catch(e) {}
 }
