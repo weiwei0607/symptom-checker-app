@@ -406,7 +406,7 @@
   <div class="modal-box">
     <h3>⚙️ Gemini API Key</h3>
     <p>AI 自然語言分析需要 Gemini API Key（只存在本機）</p>
-    <input type="password" class="modal-input" id="geminiKeyInput" placeholder="AIzaSy..." />
+    <input type="password" class="modal-input" id="geminiKeyInput" placeholder="輸入 Gemini API Key" />
     <div class="modal-btns">
       <button class="modal-cancel" onclick="closeSymptomSettings()">取消</button>
       <button class="modal-save" onclick="saveSymptomSettings()">儲存</button>
@@ -473,6 +473,11 @@ function getGeminiKey() {
   return localStorage.getItem('symptom_gemini_key') ?? '';
 }
 
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
+}
+
 function openSymptomSettings() {
   document.getElementById('geminiKeyInput').value = getGeminiKey();
   document.getElementById('settingsModal').style.display = 'flex';
@@ -525,11 +530,14 @@ async function analyzeWithAI() {
   resultEl.innerHTML = '';
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({
           contents: [{
             parts: [{
@@ -552,8 +560,10 @@ ${text}
           }],
           generationConfig: { response_mime_type: 'application/json' },
         }),
+        signal: controller.signal,
       }
     );
+    clearTimeout(timeoutId);
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
@@ -561,7 +571,20 @@ ${text}
     }
 
     const data = await resp.json();
-    const raw = data.candidates[0].content.parts[0].text.trim();
+    if (!data.candidates || data.candidates.length === 0) {
+      if (data.promptFeedback?.blockReason) {
+        throw new Error(`內容被阻擋：${data.promptFeedback.blockReason}`);
+      }
+      throw new Error('API 未回傳有效結果');
+    }
+    const candidate = data.candidates[0];
+    if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+      throw new Error(`生成被中斷：${candidate.finishReason}`);
+    }
+    if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0 || typeof candidate.content.parts[0].text !== 'string') {
+      throw new Error('API 回傳格式異常');
+    }
+    const raw = candidate.content.parts[0].text.trim();
     const result = JSON.parse(raw);
     renderAiResult(result);
   } catch (e) {
@@ -586,8 +609,8 @@ function renderAiResult(r) {
     <div class="dept-item">
       <div class="dept-rank rank-${Math.min(i+1,3)}">${i+1}</div>
       <div>
-        <div class="dept-name">${d.name}</div>
-        <div class="dept-reason">${d.reason}</div>
+        <div class="dept-name">${escapeHtml(d.name)}</div>
+        <div class="dept-reason">${escapeHtml(d.reason)}</div>
       </div>
     </div>
   `).join('');
@@ -595,7 +618,7 @@ function renderAiResult(r) {
   const redFlags = (r.redFlags ?? []).length > 0 ? `
     <div class="tip-box danger" style="margin-top:12px;">
       <strong>🚨 注意警訊：</strong><br>
-      ${r.redFlags.map(f => `• ${f}`).join('<br>')}
+      ${r.redFlags.map(f => `• ${escapeHtml(f)}`).join('<br>')}
     </div>
   ` : '';
 
@@ -603,10 +626,10 @@ function renderAiResult(r) {
   el.innerHTML = `
     <div class="result-card ${lv.cls}" style="margin-top:16px;">
       <div class="result-title">${lv.emoji} ${lv.label}</div>
-      <p style="font-size:0.85rem;color:var(--muted);margin-bottom:14px;">AI 解讀：${r.analysis}</p>
+      <p style="font-size:0.85rem;color:var(--muted);margin-bottom:14px;">AI 解讀：${escapeHtml(r.analysis)}</p>
       <div class="dept-recommendation">${depts}</div>
       ${redFlags}
-      ${r.whatToTell ? `<div class="what-to-tell"><strong>💬 就診時告訴醫師：</strong><br>${r.whatToTell}</div>` : ''}
+      ${r.whatToTell ? `<div class="what-to-tell"><strong>💬 就診時告訴醫師：</strong><br>${escapeHtml(r.whatToTell)}</div>` : ''}
       <button onclick="copyAiResult()" style="margin-top:14px;width:100%;padding:10px;border:1.5px solid #ddd;border-radius:12px;background:white;color:#555;font-size:0.85rem;font-weight:600;cursor:pointer;" onmouseenter="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseleave="this.style.borderColor='#ddd';this.style.color='#555'">📋 複製分析結果</button>
     </div>
   `;
@@ -636,6 +659,9 @@ function copyAiResult() {
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.querySelector('#aiResult button');
     if (btn) { btn.textContent = '✅ 已複製！'; setTimeout(() => { btn.textContent = '📋 複製分析結果'; }, 2000); }
+  }).catch(() => {
+    const btn = document.querySelector('#aiResult button');
+    if (btn) { btn.textContent = '❌ 複製失敗'; setTimeout(() => { btn.textContent = '📋 複製分析結果'; }, 2000); }
   });
 }
 
@@ -919,9 +945,10 @@ function analyze() {
         <strong>⚠️ 注意：</strong>「${urgentName}」建議盡快就醫。如果症狀加劇，請立即前往急診。
       </div>`;
   } else {
+    const firstDept = sortedDepts.length ? sortedDepts[0][0] : '家醫科';
     tipHtml = `
       <div class="tip-box info">
-        <strong>💡 就醫提醒：</strong>建議先掛<strong>${sortedDepts[0][0]}</strong>，醫師會視情況協助轉診其他科別。
+        <strong>💡 就醫提醒：</strong>建議先掛<strong>${firstDept}</strong>，醫師會視情況協助轉診其他科別。
       </div>`;
   }
 
