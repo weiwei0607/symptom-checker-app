@@ -506,6 +506,10 @@ function switchAiTab(tab) {
   document.getElementById('resultArea').innerHTML = '';
 }
 
+function _symptomCacheKey(text) {
+  return 'symptom_ai_' + text.slice(0, 50).replace(/\s+/g, '_');
+}
+
 async function analyzeWithAI() {
   const text = document.getElementById('aiInput').value.trim();
   const errEl = document.getElementById('aiError');
@@ -524,6 +528,19 @@ async function analyzeWithAI() {
     errEl.innerHTML = '需要 Gemini API Key 才能使用 AI 分析。<a href="#" onclick="openSymptomSettings();return false;" style="color:var(--accent);font-weight:600;">點此設定</a>';
     errEl.style.display = 'block';
     return;
+  }
+
+  // 檢查快取（1 小時 TTL）
+  const cacheKey = _symptomCacheKey(text);
+  const cachedRaw = localStorage.getItem(cacheKey);
+  const cachedTime = localStorage.getItem(cacheKey + '_time');
+  const now = Date.now();
+  if (cachedRaw && cachedTime && now - parseInt(cachedTime) < 3600000) {
+    try {
+      const cached = JSON.parse(cachedRaw);
+      renderAiResult(cached);
+      return;
+    } catch (_) { /* 快取損壞，繼續呼叫 API */ }
   }
 
   btn.disabled = true;
@@ -587,6 +604,9 @@ ${text}
     }
     const raw = candidate.content.parts[0].text.trim();
     const result = JSON.parse(raw);
+    // 寫入快取
+    localStorage.setItem(cacheKey, JSON.stringify(result));
+    localStorage.setItem(cacheKey + '_time', String(now));
     renderAiResult(result);
   } catch (e) {
     errEl.textContent = e.message || 'AI 分析失敗，請重試';
