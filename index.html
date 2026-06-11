@@ -429,6 +429,7 @@
       <div id="aiError" style="color:var(--danger);font-size:0.85rem;display:none;margin-top:8px;"></div>
       <button class="btn btn-primary" id="aiBtn" onclick="analyzeWithAI()" style="margin-top:12px;">✨ AI 智能分析</button>
       <div id="aiResult"></div>
+      <div id="aiHistory" style="margin-top:16px;"></div>
     </div>
     <div id="manualPanel" style="display:none;">
       <p style="color:var(--muted);font-size:0.9rem;">從下方選擇身體部位和症狀，點擊「分析該看哪科」</p>
@@ -469,10 +470,19 @@
 // ===== AI 分析功能 =====
 const GEMINI_MODEL = 'gemini-2.5-flash';
 
-let sessionGeminiKey = '';
+let sessionGeminiKey = localStorage.getItem('symptomChecker_geminiKey') || '';
 
 function getGeminiKey() {
   return sessionGeminiKey;
+}
+
+function setGeminiKey(key) {
+  sessionGeminiKey = key;
+  if (key) {
+    localStorage.setItem('symptomChecker_geminiKey', key);
+  } else {
+    localStorage.removeItem('symptomChecker_geminiKey');
+  }
 }
 
 function escapeHtml(str) {
@@ -489,7 +499,7 @@ function closeSymptomSettings() {
 }
 function saveSymptomSettings() {
   const key = document.getElementById('geminiKeyInput').value.trim();
-  sessionGeminiKey = key || '';
+  setGeminiKey(key || '');
   closeSymptomSettings();
 }
 
@@ -510,6 +520,8 @@ function _symptomCacheKey(text) {
   return 'symptom_ai_' + text.slice(0, 50).replace(/\s+/g, '_');
 }
 
+let _aiAnalyzing = false;
+
 async function analyzeWithAI() {
   const text = document.getElementById('aiInput').value.trim();
   const errEl = document.getElementById('aiError');
@@ -521,6 +533,7 @@ async function analyzeWithAI() {
     errEl.style.display = 'block';
     return;
   }
+  if (_aiAnalyzing) return;
   errEl.style.display = 'none';
 
   const apiKey = getGeminiKey();
@@ -539,10 +552,12 @@ async function analyzeWithAI() {
     try {
       const cached = JSON.parse(cachedRaw);
       renderAiResult(cached);
+      _saveToHistory(text, cached);
       return;
     } catch (_) { /* 快取損壞，繼續呼叫 API */ }
   }
 
+  _aiAnalyzing = true;
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span>AI 分析中...';
   resultEl.innerHTML = '';
@@ -608,13 +623,82 @@ ${text}
     localStorage.setItem(cacheKey, JSON.stringify(result));
     localStorage.setItem(cacheKey + '_time', String(now));
     renderAiResult(result);
+    _saveToHistory(text, result);
   } catch (e) {
-    errEl.textContent = e.message || 'AI 分析失敗，請重試';
+    errEl.innerHTML = `
+      <div style="margin-bottom:8px;">⚠️ ${escapeHtml(e.message || 'AI 分析失敗')}</div>
+      <div style="font-size:0.8rem;opacity:0.8;">
+        你可以改用「📋 點選症狀」模式，或<a href="#" onclick="switchAiTab('manual');return false;" style="color:var(--accent);font-weight:600;">按此切換</a>
+      </div>
+    `;
     errEl.style.display = 'block';
   } finally {
+    _aiAnalyzing = false;
     btn.disabled = false;
     btn.innerHTML = '✨ AI 智能分析';
   }
+}
+
+function _saveToHistory(inputText, result) {
+  const key = 'symptomChecker_history';
+  const history = JSON.parse(localStorage.getItem(key) || '[]');
+  history.unshift({
+    time: Date.now(),
+    input: inputText.slice(0, 100),
+    urgencyLevel: result.urgencyLevel || 'normal',
+    analysis: result.analysis || '',
+    departments: (result.departments || []).slice(0, 3),
+  });
+  localStorage.setItem(key, JSON.stringify(history.slice(0, 5)));
+  renderAiHistory();
+}
+
+function renderAiHistory() {
+  const container = document.getElementById('aiHistory');
+  const history = JSON.parse(localStorage.getItem('symptomChecker_history') || '[]');
+  if (history.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  const levelMap = { emergency: '🚨', urgent: '⚠️', normal: '✅' };
+  container.innerHTML = `
+    <div style="border-top:1px solid #eee;padding-top:12px;">
+      <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+        <span>📋 最近分析</span>
+        <button onclick="_clearHistory()" style="font-size:0.75rem;color:#aaa;background:none;border:none;cursor:pointer;padding:2px 6px;">清空</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${history.map((h, i) => `
+          <button onclick="_loadHistory(${i})" style="text-align:left;padding:10px 12px;border:1.5px solid #e8e8e8;border-radius:10px;background:white;cursor:pointer;font-size:0.85rem;transition:all 0.15s;" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='#e8e8e8'">
+            <span style="font-size:0.75rem;color:#aaa;">${new Date(h.time).toLocaleString('zh-TW',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+            <div style="margin-top:2px;">${levelMap[h.urgencyLevel] || '✅'} ${escapeHtml(h.input)}</div>
+            <div style="font-size:0.75rem;color:var(--muted);margin-top:2px;">${h.departments.map(d => d.name).join('、')}</div>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function _loadHistory(index) {
+  const history = JSON.parse(localStorage.getItem('symptomChecker_history') || '[]');
+  const h = history[index];
+  if (!h) return;
+  document.getElementById('aiInput').value = h.input;
+  renderAiResult({
+    urgencyLevel: h.urgencyLevel,
+    analysis: h.analysis,
+    departments: h.departments,
+    redFlags: [],
+    whatToTell: '',
+  });
+  document.getElementById('aiResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function _clearHistory() {
+  if (!confirm('確定要清空所有歷史記錄嗎？')) return;
+  localStorage.removeItem('symptomChecker_history');
+  renderAiHistory();
 }
 
 function renderAiResult(r) {
@@ -814,6 +898,17 @@ const SYMPTOM_DB = {
       { name: '恐慌發作', urgent: false, depts: ['精神科', '身心科'], note: '胸悶、心悸、瀕死感' },
       { name: '注意力不集中', urgent: false, depts: ['精神科'], note: '長期困擾可能是ADHD' },
       { name: '自殺意念', urgent: true, depts: ['急診', '精神科'], note: '請立即撥打1925或至急診' },
+    ]
+  },
+  back: {
+    name: '背部/腰部',
+    emoji: '🔙',
+    symptoms: [
+      { name: '腰酸背痛', urgent: false, depts: ['復健科', '骨科'], note: '慢性酸痛→復健科；外傷後→骨科' },
+      { name: '肩膀僵硬', urgent: false, depts: ['復健科'], note: '長期僵硬可能是肩頸症候群' },
+      { name: '坐骨神經痛', urgent: false, depts: ['神經外科', '復健科'], note: '下肢麻痛→神經外科；復健→復健科' },
+      { name: '脊椎側彎', urgent: false, depts: ['骨科', '復健科'], note: '青少年→骨科評估' },
+      { name: '背部腫塊', urgent: false, depts: ['皮膚科', '外科'], note: '快速變大→盡速就醫' },
     ]
   },
   general: {
@@ -1036,6 +1131,7 @@ function loadState() {
 // 初始化
 initBodyParts();
 loadState();
+renderAiHistory();
 </script>
 
 </body>
